@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="tr">
+<style>
+body {
+  margin: 0;
+  background: #080b25;
+}
+
+.kapak {
+  width: 100%;
+  min-height: 300px;
+  background-image: url("yagiz-ai-kapak.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+</style>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YağızAI</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101116;color:white;font-family:Arial;display:flex;height:100vh}
+aside{width:230px;background:#191a22;padding:20px;display:flex;flex-direction:column;gap:15px}
+.logo{font-size:28px;color:#a99aff;font-weight:bold}
+button,select{padding:13px;border:0;border-radius:10px;background:#292b38;color:white;cursor:pointer}
+button:hover{background:#51477e}
+#new{background:#7561dc}
+#status{margin-top:auto;color:#aaa;font-size:13px}
+main{flex:1;display:flex;flex-direction:column;min-width:0}
+header{padding:20px;border-bottom:1px solid #292b38}
+#chat{flex:1;overflow:auto;padding:25px;display:flex;flex-direction:column;gap:15px}
+.welcome{text-align:center;margin:auto;color:#aaa}
+.welcome h1{color:white}
+.msg{padding:14px 18px;border-radius:15px;max-width:800px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}
+.user{align-self:flex-end;background:#6554c9}
+.ai{align-self:flex-start;background:#242632}
+form{display:flex;gap:10px;padding:18px;max-width:950px;width:100%;margin:auto}
+textarea{flex:1;resize:none;min-height:55px;max-height:150px;background:#242632;color:white;border:1px solid #444;border-radius:13px;padding:15px;font:inherit}
+#send{background:#7561dc}
+@media(max-width:600px){aside{width:125px;padding:10px}.logo{font-size:19px}}
+</style>
+</head>
+<body>
+<aside>
+<div class="logo">✦ YağızAI</div>
+<button id="new">＋ Yeni sohbet</button>
+<label>Model seç</label>
+<select id="model"></select>
+<div id="status">Bağlantı kontrol ediliyor...</div>
+</aside>
+<main>
+<header>YağızAI — Türkçe yapay zekâ</header>
+<section id="chat">
+<div class="welcome" id="welcome">
+<h1>Merhaba! 👋</h1>
+<p>Bugün sana nasıl yardımcı olabilirim?</p>
+</div>
+</section>
+<form id="form">
+<textarea id="prompt" placeholder="Mesajını yaz..." required></textarea>
+<button id="send">Gönder ➤</button>
+</form>
+</main>
+<script>
+const chat=document.getElementById("chat");
+const model=document.getElementById("model");
+const statusEl=document.getElementById("status");
+const promptEl=document.getElementById("prompt");
+let history=[];
+
+function addMessage(text,type){
+const el=document.createElement("div");
+el.className="msg "+type;
+el.textContent=text;
+chat.appendChild(el);
+chat.scrollTop=chat.scrollHeight;
+return el;
+}
+
+async function loadModels(){
+try{
+const r=await fetch("/api/models");
+if(!r.ok)throw Error();
+const data=await r.json();
+model.innerHTML="";
+for(const item of data.models||[]){
+const option=document.createElement("option");
+option.value=item.name;
+option.textContent=item.name;
+model.appendChild(option);
+}
+statusEl.textContent=model.options.length?"● Ollama bağlı":"● Model bulunamadı";
+}catch{
+statusEl.textContent="● Ollama bağlantısı yok";
+model.innerHTML='<option value="">Bağlantı yok</option>';
+}
+}
+
+document.getElementById("form").addEventListener("submit",async e=>{
+e.preventDefault();
+const text=promptEl.value.trim();
+if(!text)return;
+if(!model.value){
+addMessage("Önce Ollama'da bir model kurmalısın.","ai");
+return;
+}
+document.getElementById("welcome")?.remove();
+addMessage(text,"user");
+history.push({role:"user",content:text});
+promptEl.value="";
+const answer=addMessage("Yanıt hazırlanıyor...","ai");
+document.getElementById("send").disabled=true;
+try{
+const r=await fetch("/api/chat",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({model:model.value,messages:history})
+});
+const data=await r.json();
+if(!r.ok)throw Error(data.error||"İstek başarısız");
+const result=data.message?.content||"Yanıt boş geldi.";
+answer.textContent=result;
+history.push({role:"assistant",content:result});
+}catch(err){
+answer.textContent="Hata: "+err.message;
+history.pop();
+}finally{
+document.getElementById("send").disabled=false;
+promptEl.focus();
+}
+});
+
+document.getElementById("new").onclick=()=>{
+history=[];
+chat.innerHTML='<div class="welcome" id="welcome"><h1>Merhaba! 👋</h1><p>Bugün sana nasıl yardımcı olabilirim?</p></div>';
+};
+
+promptEl.addEventListener("keydown",e=>{
+if(e.key==="Enter"&&!e.shiftKey){
+e.preventDefault();
+document.getElementById("form").requestSubmit();
+}
+});
+loadModels();
+</script>
+</body>
+</html>
